@@ -4,6 +4,7 @@
  */
 
 import { categorizeTransaction } from "../constants/categories.js";
+import { sumTransactions, subtract } from "../utils/calculator.js";
 
 /**
  * 解析民生银行流水文本
@@ -109,15 +110,20 @@ function parseTransactionLine(line, allLines, index) {
     const dateStr = dateMatch[1];
     const timeStr = dateMatch[2];
 
-    // 提取金额（可能有多个金额：交易金额和账户余额）
-    const amounts = line.match(/[\d,]+\.\d{2}/g) || [];
+    // 提取金额（可能带负号，支持逗号分隔）
+    // 匹配格式：-1,316.78 或 25.66 或 -6.00
+    const amounts = line.match(/-?[\d,]+\.\d{2}/g) || [];
 
     // 根据民生银行格式，第一个金额是交易金额，第二个是账户余额
     let amount = 0;
     let balance = 0;
+    let isIncome = false;
 
     if (amounts.length >= 1) {
-      amount = parseFloat(amounts[0].replace(/,/g, ""));
+      const rawAmount = parseFloat(amounts[0].replace(/,/g, ""));
+      // 根据金额正负判断收入/支出
+      isIncome = rawAmount > 0;
+      amount = Math.abs(rawAmount); // 存储绝对值，类型由 isIncome 决定
     }
     if (amounts.length >= 2) {
       balance = parseFloat(amounts[1].replace(/,/g, ""));
@@ -222,18 +228,15 @@ function parseTransactionLine(line, allLines, index) {
       }
     }
 
-    // 判断收入还是支出
-    const isIncome = detectTransactionType(line, description, amount, balance);
-
     return {
       id: `${dateStr}-${timeStr}-${Math.random().toString(36).substr(2, 9)}`,
       date: dateStr.replace(/\//g, "-"),
       time: timeStr,
       datetime: new Date(`${dateStr.replace(/\//g, "-")}T${timeStr}`),
       description: description || "银行交易",
-      amount: Math.abs(amount),
+      amount,
       balance,
-      type: isIncome ? "income" : "expense",
+      type: isIncome ? "income" : "expense", // 根据金额正负判断
       counterparty: counterparty || counterpartyBank || "",
       counterpartyBank,
       voucherNumber,
@@ -243,49 +246,6 @@ function parseTransactionLine(line, allLines, index) {
     console.error("解析交易行失败:", error, line);
     return null;
   }
-}
-
-/**
- * 判断交易类型（收入/支出）
- */
-function detectTransactionType(line, description, amount, balance) {
-  // 根据描述关键词判断
-  const incomeKeywords = [
-    "入账",
-    "收入",
-    "利息",
-    "收益",
-    "赎回",
-    "工资",
-    "薪资",
-    "代发",
-    "转入",
-  ];
-  const expenseKeywords = [
-    "支出",
-    "消费",
-    "付款",
-    "转出",
-    "扣款",
-    "申购",
-    "代付",
-  ];
-
-  const text = `${line} ${description}`.toLowerCase();
-
-  for (const keyword of incomeKeywords) {
-    if (text.includes(keyword)) return true;
-  }
-
-  for (const keyword of expenseKeywords) {
-    if (text.includes(keyword)) return false;
-  }
-
-  // 默认：如果描述中包含"入"字，认为是收入
-  if (description.includes("入")) return true;
-
-  // 默认为支出
-  return false;
 }
 
 /**
@@ -327,24 +287,22 @@ function isHeaderOrFooter(line) {
 }
 
 /**
- * 计算汇总信息
+ * 计算汇总信息（使用精确计算）
  */
 function calculateSummary(transactions) {
-  const income = transactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
+  const incomeTransactions = transactions.filter((t) => t.type === "income");
+  const expenseTransactions = transactions.filter((t) => t.type === "expense");
 
-  const expense = transactions
-    .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + t.amount, 0);
+  const income = sumTransactions(incomeTransactions);
+  const expense = sumTransactions(expenseTransactions);
 
   return {
     totalTransactions: transactions.length,
-    incomeCount: transactions.filter((t) => t.type === "income").length,
-    expenseCount: transactions.filter((t) => t.type === "expense").length,
+    incomeCount: incomeTransactions.length,
+    expenseCount: expenseTransactions.length,
     totalIncome: income,
     totalExpense: expense,
-    balance: income - expense,
+    balance: subtract(income, expense),
   };
 }
 

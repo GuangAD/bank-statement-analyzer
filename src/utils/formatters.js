@@ -3,6 +3,7 @@
  */
 
 import dayjs from "dayjs";
+import { percentage } from "./calculator.js";
 
 /**
  * 格式化金额
@@ -71,15 +72,14 @@ export function formatRelativeDate(date) {
 }
 
 /**
- * 格式化百分比
+ * 格式化百分比（使用精确计算）
  * @param {number} value - 数值
  * @param {number} total - 总数
  * @returns {string} 百分比字符串
  */
 export function formatPercent(value, total) {
   if (total === 0) return "0%";
-  const percent = (value / total) * 100;
-  return percent.toFixed(1) + "%";
+  return percentage(value, total, 1) + "%";
 }
 
 /**

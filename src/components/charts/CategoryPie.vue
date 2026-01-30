@@ -46,6 +46,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import * as echarts from "echarts";
 import { useTransactionStore } from "../../stores/transactionStore.js";
 import { formatAmount } from "../../utils/formatters.js";
+import { add, divide, percentage } from "../../utils/calculator.js";
 
 const store = useTransactionStore();
 const chartRef = ref(null);
@@ -67,10 +68,10 @@ const topCategories = computed(() => {
   return categoryData.value.slice(0, 8);
 });
 
-// 总金额
+// 总金额（使用精确计算）
 const total = computed(() => {
   return categoryData.value.reduce(
-    (sum, c) => sum + (type.value === "expense" ? c.expense : c.income),
+    (sum, c) => add(sum, type.value === "expense" ? c.expense : c.income),
     0,
   );
 });
@@ -78,7 +79,7 @@ const total = computed(() => {
 function getPercent(item) {
   const value = type.value === "expense" ? item.expense : item.income;
   if (total.value === 0) return 0;
-  return ((value / total.value) * 100).toFixed(1);
+  return percentage(value, total.value, 1);
 }
 
 function renderChart() {

@@ -26,20 +26,53 @@
       <div class="stat-bg-icon">↓</div>
     </div>
 
-    <!-- 结余卡片 -->
+    <!-- 收支净额卡片（收入-支出） -->
     <div class="stat-card balance-card">
       <div class="stat-icon">📊</div>
       <div class="stat-content">
-        <span class="stat-label">结余</span>
+        <span class="stat-label">收支净额</span>
         <span
           class="stat-value"
           :class="balance >= 0 ? 'text-income' : 'text-expense'"
         >
-          {{ balance >= 0 ? "" : "-" }}{{ formatCurrency(Math.abs(balance)) }}
+          {{ balance >= 0 ? "+" : "" }}{{ formatCurrency(balance) }}
         </span>
-        <span class="stat-count">{{ balance >= 0 ? "盈余" : "超支" }}</span>
+        <span class="stat-count">收入 - 支出</span>
       </div>
       <div class="stat-bg-icon">=</div>
+    </div>
+
+    <!-- 账户变动卡片（期末-期初） -->
+    <div class="stat-card change-card">
+      <div class="stat-icon">🏦</div>
+      <div class="stat-content">
+        <span class="stat-label">账户变动</span>
+        <span
+          class="stat-value"
+          :class="balanceChange >= 0 ? 'text-income' : 'text-expense'"
+        >
+          {{ balanceChange >= 0 ? "+" : "" }}{{ formatCurrency(balanceChange) }}
+        </span>
+        <span
+          class="stat-count"
+          :title="`期初: ${formatCurrency(startingBalance)} → 期末: ${formatCurrency(endingBalance)}`"
+        >
+          期末 - 期初
+        </span>
+      </div>
+      <div class="stat-bg-icon">Δ</div>
+    </div>
+
+    <!-- 数据差异提示 -->
+    <div class="stat-card diff-card" v-if="hasDifference">
+      <div class="stat-icon">⚠️</div>
+      <div class="stat-content">
+        <span class="stat-label">数据差异</span>
+        <span class="stat-value text-warning">
+          {{ formatCurrency(Math.abs(difference)) }}
+        </span>
+        <span class="stat-count">可能存在解析误差</span>
+      </div>
     </div>
 
     <!-- 收支比例卡片 -->
@@ -76,6 +109,7 @@
 import { computed } from "vue";
 import { useTransactionStore } from "../stores/transactionStore.js";
 import { formatCurrency } from "../utils/formatters.js";
+import { add, subtract, percentage, abs } from "../utils/calculator.js";
 
 const store = useTransactionStore();
 
@@ -85,19 +119,29 @@ const balance = computed(() => store.balance);
 const incomeCount = computed(() => store.incomeCount);
 const expenseCount = computed(() => store.expenseCount);
 
-const total = computed(() => totalIncome.value + totalExpense.value);
+// 账户余额相关
+const startingBalance = computed(() => store.startingBalance);
+const endingBalance = computed(() => store.endingBalance);
+const balanceChange = computed(() => store.balanceChange);
+
+// 数据差异（收支净额 vs 账户变动）
+const difference = computed(() => subtract(balance.value, balanceChange.value));
+const hasDifference = computed(() => abs(difference.value) > 0.01);
+
+// 使用精确计算
+const total = computed(() => add(totalIncome.value, totalExpense.value));
 const incomeRatio = computed(() =>
-  total.value > 0 ? (totalIncome.value / total.value) * 100 : 50,
+  total.value > 0 ? percentage(totalIncome.value, total.value, 2) : 50,
 );
 const expenseRatio = computed(() =>
-  total.value > 0 ? (totalExpense.value / total.value) * 100 : 50,
+  total.value > 0 ? percentage(totalExpense.value, total.value, 2) : 50,
 );
 </script>
 
 <style scoped>
 .dashboard {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-lg);
 }
 
@@ -158,6 +202,18 @@ const expenseRatio = computed(() =>
 
 .ratio-card .stat-icon {
   background: linear-gradient(135deg, var(--income-bg), var(--expense-bg));
+}
+
+.change-card .stat-icon {
+  background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+}
+
+.diff-card .stat-icon {
+  background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+}
+
+.text-warning {
+  color: #f57c00 !important;
 }
 
 .stat-content {

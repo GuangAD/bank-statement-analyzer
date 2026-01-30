@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "big.js": "^7.0.1",
     "dayjs": "^1.11.19",
     "echarts": "^6.0.0",
     "pdfjs-dist": "^5.4.530",

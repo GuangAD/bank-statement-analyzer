@@ -90,6 +90,7 @@
 import { computed } from "vue";
 import { useTransactionStore } from "../stores/transactionStore.js";
 import dayjs from "dayjs";
+import { add, divide, multiply } from "../utils/calculator.js";
 
 const store = useTransactionStore();
 
@@ -105,9 +106,9 @@ const monthlyData = computed(() => {
 
     stats[month].count++;
     if (t.type === "income") {
-      stats[month].income += t.amount;
+      stats[month].income = add(stats[month].income, t.amount);
     } else {
-      stats[month].expense += t.amount;
+      stats[month].expense = add(stats[month].expense, t.amount);
     }
   });
 
@@ -164,11 +165,11 @@ function formatAmount(amount) {
   );
 }
 
-// 计算柱状条宽度
+// 计算柱状条宽度（使用精确计算）
 function getBarWidth(value, month) {
   const max = Math.max(month.income, month.expense);
   if (max === 0) return 0;
-  return (value / max) * 100;
+  return multiply(divide(value, max, 4), 100);
 }
 </script>
 

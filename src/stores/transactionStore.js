@@ -7,6 +7,7 @@ import { ref, computed } from "vue";
 import dayjs from "dayjs";
 import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
 import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+import { add, subtract, sumTransactions } from "../utils/calculator.js";
 
 // 扩展 dayjs
 dayjs.extend(isSameOrAfter);
@@ -102,23 +103,23 @@ export const useTransactionStore = defineStore("transactions", () => {
     return result;
   });
 
-  // 总收入
+  // 总收入（使用精确计算）
   const totalIncome = computed(() => {
-    return filteredTransactions.value
-      .filter((t) => t.type === "income")
-      .reduce((sum, t) => sum + t.amount, 0);
+    return sumTransactions(
+      filteredTransactions.value.filter((t) => t.type === "income"),
+    );
   });
 
-  // 总支出
+  // 总支出（使用精确计算）
   const totalExpense = computed(() => {
-    return filteredTransactions.value
-      .filter((t) => t.type === "expense")
-      .reduce((sum, t) => sum + t.amount, 0);
+    return sumTransactions(
+      filteredTransactions.value.filter((t) => t.type === "expense"),
+    );
   });
 
-  // 结余
+  // 结余（使用精确计算）
   const balance = computed(() => {
-    return totalIncome.value - totalExpense.value;
+    return subtract(totalIncome.value, totalExpense.value);
   });
 
   // 收入笔数
@@ -130,6 +131,45 @@ export const useTransactionStore = defineStore("transactions", () => {
   const expenseCount = computed(() => {
     return filteredTransactions.value.filter((t) => t.type === "expense")
       .length;
+  });
+
+  // 期初余额（最早一笔交易的余额 + 或 - 该笔交易金额）
+  const startingBalance = computed(() => {
+    if (rawTransactions.value.length === 0) return 0;
+
+    // 按日期时间排序，获取最早的交易
+    const sorted = [...rawTransactions.value].sort((a, b) => {
+      const dateCompare = a.date.localeCompare(b.date);
+      if (dateCompare !== 0) return dateCompare;
+      return (a.time || "").localeCompare(b.time || "");
+    });
+
+    const firstTransaction = sorted[0];
+    // 期初余额 = 第一笔交易后的余额 ± 第一笔交易金额
+    if (firstTransaction.type === "income") {
+      return subtract(firstTransaction.balance, firstTransaction.amount);
+    } else {
+      return add(firstTransaction.balance, firstTransaction.amount);
+    }
+  });
+
+  // 期末余额（最新一笔交易的余额）
+  const endingBalance = computed(() => {
+    if (rawTransactions.value.length === 0) return 0;
+
+    // 按日期时间排序，获取最新的交易
+    const sorted = [...rawTransactions.value].sort((a, b) => {
+      const dateCompare = b.date.localeCompare(a.date);
+      if (dateCompare !== 0) return dateCompare;
+      return (b.time || "").localeCompare(a.time || "");
+    });
+
+    return sorted[0].balance;
+  });
+
+  // 账户余额变化（期末余额 - 期初余额）
+  const balanceChange = computed(() => {
+    return subtract(endingBalance.value, startingBalance.value);
   });
 
   // 按分类统计（用于饼图）
@@ -151,11 +191,11 @@ export const useTransactionStore = defineStore("transactions", () => {
 
       stats[key].count++;
       if (t.type === "income") {
-        stats[key].income += t.amount;
+        stats[key].income = add(stats[key].income, t.amount);
       } else {
-        stats[key].expense += t.amount;
+        stats[key].expense = add(stats[key].expense, t.amount);
       }
-      stats[key].total = stats[key].income + stats[key].expense;
+      stats[key].total = add(stats[key].income, stats[key].expense);
     });
 
     return Object.values(stats).sort((a, b) => b.expense - a.expense);
@@ -172,9 +212,9 @@ export const useTransactionStore = defineStore("transactions", () => {
       }
 
       if (t.type === "income") {
-        stats[month].income += t.amount;
+        stats[month].income = add(stats[month].income, t.amount);
       } else {
-        stats[month].expense += t.amount;
+        stats[month].expense = add(stats[month].expense, t.amount);
       }
     });
 
@@ -193,9 +233,9 @@ export const useTransactionStore = defineStore("transactions", () => {
 
       stats[day].count++;
       if (t.type === "income") {
-        stats[day].income += t.amount;
+        stats[day].income = add(stats[day].income, t.amount);
       } else {
-        stats[day].expense += t.amount;
+        stats[day].expense = add(stats[day].expense, t.amount);
       }
     });
 
@@ -334,6 +374,9 @@ export const useTransactionStore = defineStore("transactions", () => {
     balance,
     incomeCount,
     expenseCount,
+    startingBalance,
+    endingBalance,
+    balanceChange,
     categoryStats,
     monthlyStats,
     dailyStats,

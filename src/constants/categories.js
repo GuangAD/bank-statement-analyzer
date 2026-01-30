@@ -80,6 +80,7 @@ export const CATEGORIES = [
       "定期",
       "存款",
       "利息",
+      "结息",
       "收益",
       "赎回",
       "申购",
@@ -309,19 +310,49 @@ export const CATEGORIES = [
 
 /**
  * 根据交易描述和对方户名自动分类
+ * 策略：按"-"分割摘要，从后向前依次匹配分类关键词
  * @param {string} description - 交易摘要
  * @param {string} counterparty - 对方户名
  * @returns {object} 分类对象
  */
 export function categorizeTransaction(description = "", counterparty = "") {
-  const text = `${description} ${counterparty}`.toLowerCase();
+  // 按"-"分割摘要为多个段落
+  const segments = description
+    .split("-")
+    .map((s) => s.trim())
+    .filter((s) => s);
 
-  // 遍历分类进行匹配
+  // 添加对方户名作为额外的匹配段
+  if (counterparty && counterparty.trim()) {
+    segments.push(counterparty.trim());
+  }
+
+  // 反转数组，从后向前匹配
+  const reversedSegments = [...segments].reverse();
+
+  // 从后向前遍历每个段落
+  for (const segment of reversedSegments) {
+    const segmentLower = segment.toLowerCase();
+
+    // 遍历分类进行匹配
+    for (const category of CATEGORIES) {
+      if (category.id === "other") continue; // 跳过"其他"分类
+
+      for (const keyword of category.keywords) {
+        if (segmentLower.includes(keyword.toLowerCase())) {
+          return category;
+        }
+      }
+    }
+  }
+
+  // 如果分段匹配都失败，尝试整体匹配（兼容旧逻辑）
+  const fullText = `${description} ${counterparty}`.toLowerCase();
   for (const category of CATEGORIES) {
-    if (category.id === "other") continue; // 跳过"其他"分类
+    if (category.id === "other") continue;
 
     for (const keyword of category.keywords) {
-      if (text.includes(keyword.toLowerCase())) {
+      if (fullText.includes(keyword.toLowerCase())) {
         return category;
       }
     }

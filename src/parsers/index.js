@@ -4,7 +4,9 @@
  */
 
 import { parseMinshengBank, isMinshengBank } from "./MinshengParser.js";
+import { parseICBCBank, isICBCStatement } from "./ICBCParser.js";
 import { categorizeTransaction } from "../constants/categories.js";
+import { sumTransactions, subtract } from "../utils/calculator.js";
 
 // 已注册的解析器列表
 const parsers = [
@@ -13,8 +15,12 @@ const parsers = [
     detect: isMinshengBank,
     parse: parseMinshengBank,
   },
+  {
+    name: "工商银行",
+    detect: isICBCStatement,
+    parse: parseICBCBank,
+  },
   // 后续可添加更多银行解析器
-  // { name: '工商银行', detect: isICBCBank, parse: parseICBCBank },
   // { name: '招商银行', detect: isCMBBank, parse: parseCMBBank },
 ];
 
@@ -22,9 +28,20 @@ const parsers = [
  * 解析 PDF 文本
  * 自动识别银行类型并调用对应解析器
  * @param {string} text - PDF 文本内容
+ * @param {string} bankName - 可选，已检测的银行名称（跳过重复检测）
  * @returns {object} 解析结果
  */
-export function parseBankStatement(text) {
+export function parseBankStatement(text, bankName = null) {
+  // 如果已提供银行名称，直接使用对应解析器
+  if (bankName) {
+    for (const parser of parsers) {
+      if (parser.name === bankName) {
+        console.log(`使用 ${parser.name} 解析器`);
+        return parser.parse(text);
+      }
+    }
+  }
+
   // 尝试匹配已注册的解析器
   for (const parser of parsers) {
     if (parser.detect(text)) {
@@ -36,6 +53,20 @@ export function parseBankStatement(text) {
   // 未匹配到已知银行，使用通用解析器
   console.log("未识别银行类型，使用通用解析器");
   return parseGenericStatement(text);
+}
+
+/**
+ * 检测银行类型
+ * @param {string} text - PDF 文本内容
+ * @returns {string} 银行名称
+ */
+export function detectBankType(text) {
+  for (const parser of parsers) {
+    if (parser.detect(text)) {
+      return parser.name;
+    }
+  }
+  return "未知银行";
 }
 
 /**
@@ -115,13 +146,11 @@ function parseGenericStatement(text) {
     transactions.push(transaction);
   }
 
-  // 计算汇总
-  const income = transactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
-  const expense = transactions
-    .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + t.amount, 0);
+  // 计算汇总（使用精确计算）
+  const incomeTransactions = transactions.filter((t) => t.type === "income");
+  const expenseTransactions = transactions.filter((t) => t.type === "expense");
+  const income = sumTransactions(incomeTransactions);
+  const expense = sumTransactions(expenseTransactions);
 
   return {
     bankName: "未知银行",
@@ -134,11 +163,11 @@ function parseGenericStatement(text) {
     transactions,
     summary: {
       totalTransactions: transactions.length,
-      incomeCount: transactions.filter((t) => t.type === "income").length,
-      expenseCount: transactions.filter((t) => t.type === "expense").length,
+      incomeCount: incomeTransactions.length,
+      expenseCount: expenseTransactions.length,
       totalIncome: income,
       totalExpense: expense,
-      balance: income - expense,
+      balance: subtract(income, expense),
     },
   };
 }
